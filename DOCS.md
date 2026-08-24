@@ -110,6 +110,7 @@ Display is `M:SS.xx`. No coach copy. No predicted place. Built-in model is none.
 | File | Job |
 | --- | --- |
 | `index.html` | Shell, dark phone-wide CSS |
+| `visual.js` | Intro, tape strip, phase readout. Optional atmosphere |
 | `line.js` | Place line, sample 64 luma points, draw, flash |
 | `pose.js` | MediaPipe Pose wireframes + hip-cross (CDN; optional) |
 | `config.js` | Meet setup: events, marks, detect, URL, import/export |
