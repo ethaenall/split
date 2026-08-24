@@ -20,7 +20,7 @@ Do not submit until the public repo and live HTTPS URL are in the boxes below.
 5. Clock starts. Wave a hand through the line. The line flashes. Split 1 is the 400.
 6. Wave again. Split 2 is the 800. Clock stops. Read this / even / next-must.
 
-If you opened the HTML as a file, the yellow banner tells you to run `python3 -m http.server 8765`.
+If you opened the HTML as a file, the yellow banner tells you to run `python3 -m http.server 8767`.
 
 ## Fields
 

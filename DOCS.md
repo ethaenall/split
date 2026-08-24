@@ -115,11 +115,12 @@ Display is `M:SS.xx`. No coach copy. No predicted place. Built-in model is none.
 | `config.js` | Meet setup: events, marks, detect, URL, import/export |
 | `split.js` | Camera, file clip, calibrate, detect, clock, math |
 | `sync.js` | Session JSON, webhook, last-20 log, OpenAI-compatible ask |
+| `test/run.js` | Node tests: math, cover-crop, boot, ARM, luma stamp |
 | `LICENSE` | MIT, Copyright 2026 Ethan Birchenall |
 
 Vanilla JavaScript. No build step.
 
-Detection: each frame copies the video into an offscreen canvas, reads a 1-pixel strip on the line, compares the 64-point profile to the baseline, triggers when energy ≥ threshold for 2 frames, then ignores the line for 800ms. If the Pose model loaded, stick figures are drawn on people and a hip that crosses the line also stamps (`source: pose`). If the CDN or model fails, luma still works.
+Detection: each frame copies the video into an offscreen canvas, maps the on-screen line through `object-fit: cover` into video pixels, reads the visible 1-pixel strip, compares the 64-point profile to the baseline, triggers when energy ≥ threshold for 2 frames, then ignores the line for 800ms. If the Pose model loaded, stick figures are drawn on people and a hip that crosses the line also stamps (`source: pose`). If the CDN or model fails, luma still works.
 
 ## Built vs not
 

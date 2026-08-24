@@ -23,6 +23,8 @@ python3 -m http.server 8767
 
 Open http://127.0.0.1:8767
 
+`node test/run.js` — math, cover-crop, boot crash guard.
+
 Camera is blocked on `file://`. Use the server.
 
 Judges: allow camera → tap the video to draw the line → ARM → wait one second → wave a hand through the line → the split appears.

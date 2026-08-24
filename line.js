@@ -69,8 +69,30 @@
       }
     },
 
-    /* Fill this.profile[0..n) with luma along the line. Returns mean or -1. */
-    sample: function (video) {
+    /* object-fit:cover visible window in video-normalized coords. */
+    visibleRange: function (vw, vh, ow, oh) {
+      if (!vw || !vh || !ow || !oh) return { x0: 0, x1: 1, y0: 0, y1: 1 };
+      var vr = vw / vh;
+      var orr = ow / oh;
+      if (vr > orr) {
+        var visW = orr / vr;
+        return { x0: (1 - visW) / 2, x1: (1 + visW) / 2, y0: 0, y1: 1 };
+      }
+      if (vr < orr) {
+        var visH = vr / orr;
+        return { x0: 0, x1: 1, y0: (1 - visH) / 2, y1: (1 + visH) / 2 };
+      }
+      return { x0: 0, x1: 1, y0: 0, y1: 1 };
+    },
+
+    overlayToVideoT: function (overlayT, vw, vh, ow, oh) {
+      var r = this.visibleRange(vw, vh, ow, oh);
+      if (this.orientation === "vertical") return r.x0 + overlayT * (r.x1 - r.x0);
+      return r.y0 + overlayT * (r.y1 - r.y0);
+    },
+
+    /* Fill this.profile[0..n) with luma along the visible line. Returns mean or -1. */
+    sample: function (video, overlay) {
       var vw = video.videoWidth | 0;
       var vh = video.videoHeight | 0;
       if (!vw || !vh) return -1;
@@ -83,26 +105,35 @@
         this.profile = new Float32Array(n);
       }
 
-      var t = this.t;
+      var ow = overlay && overlay.width ? overlay.width : vw;
+      var oh = overlay && overlay.height ? overlay.height : vh;
+      var range = this.visibleRange(vw, vh, ow, oh);
+      var t = this.overlayToVideoT(this.t, vw, vh, ow, oh);
       var mean = 0;
-      var i, img, data, px, py, idx;
+      var i, img, data, px, py, idx, a, b, span;
 
       if (this.orientation === "vertical") {
         px = Math.max(0, Math.min(vw - 1, Math.round(t * (vw - 1))));
-        img = this.workCtx.getImageData(px, 0, 1, vh);
+        a = Math.max(0, Math.min(vh - 1, Math.round(range.y0 * (vh - 1))));
+        b = Math.max(a + 1, Math.min(vh, Math.round(range.y1 * (vh - 1)) + 1));
+        img = this.workCtx.getImageData(px, a, 1, b - a);
         data = img.data;
+        span = b - a;
         for (i = 0; i < n; i++) {
-          py = Math.max(0, Math.min(vh - 1, Math.round((i / (n - 1)) * (vh - 1))));
+          py = Math.max(0, Math.min(span - 1, Math.round((i / (n - 1)) * (span - 1))));
           idx = py * 4;
           this.profile[i] = lumaAt(data, idx);
           mean += this.profile[i];
         }
       } else {
         py = Math.max(0, Math.min(vh - 1, Math.round(t * (vh - 1))));
-        img = this.workCtx.getImageData(0, py, vw, 1);
+        a = Math.max(0, Math.min(vw - 1, Math.round(range.x0 * (vw - 1))));
+        b = Math.max(a + 1, Math.min(vw, Math.round(range.x1 * (vw - 1)) + 1));
+        img = this.workCtx.getImageData(a, py, b - a, 1);
         data = img.data;
+        span = b - a;
         for (i = 0; i < n; i++) {
-          px = Math.max(0, Math.min(vw - 1, Math.round((i / (n - 1)) * (vw - 1))));
+          px = Math.max(0, Math.min(span - 1, Math.round((i / (n - 1)) * (span - 1))));
           idx = px * 4;
           this.profile[i] = lumaAt(data, idx);
           mean += this.profile[i];

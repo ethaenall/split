@@ -244,7 +244,43 @@
   }
 
   function renderClock() {
-    $("clock").textContent = formatTime(state.elapsed);
+    var el = $("clock");
+    if (el) el.textContent = formatTime(state.elapsed);
+  }
+
+  function setText(el, text) {
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+
+  function renderPace() {
+    var nextEl = $("next-must");
+    var remEl = $("remain");
+    var left = state.planned - state.crossings.length;
+    var nxt = nextMust(state.goalSec, state.elapsed, left);
+    if (left <= 0) {
+      setText(nextEl, "done");
+      if (remEl) {
+        if (isFinite(state.goalSec)) {
+          setText(remEl, formatSigned(state.elapsed - state.goalSec) + " vs goal");
+          remEl.className = "remain " + (state.elapsed - state.goalSec > 0.004 ? "late" : "early");
+        } else {
+          setText(remEl, "no goal");
+          remEl.className = "remain";
+        }
+      }
+    } else if (!isFinite(nxt)) {
+      setText(nextEl, "set goal");
+      if (remEl) {
+        setText(remEl, formatTime(state.elapsed) + " elapsed");
+        remEl.className = "remain";
+      }
+    } else {
+      setText(nextEl, formatTime(nxt));
+      if (remEl) {
+        setText(remEl, formatTime(Math.max(0, state.goalSec - state.elapsed)) + " left");
+        remEl.className = "remain";
+      }
+    }
   }
 
   function renderSplits() {
@@ -255,63 +291,47 @@
     var thisEl = $("this-int");
     var evenEl = $("even-int");
     var vsEl = $("vs-even");
-    var nextEl = $("next-must");
-    var remEl = $("remain");
     var list = $("split-list");
 
-    thisEl.textContent = last ? formatTime(last.interval) : "—";
-    evenEl.textContent = isFinite(evn) ? formatTime(evn) : "set goal";
+    setText(thisEl, last ? formatTime(last.interval) : "—");
+    setText(evenEl, isFinite(evn) ? formatTime(evn) : "set goal");
 
-    if (last && isFinite(evn)) {
-      var delta = last.interval - evn;
-      vsEl.textContent = formatSigned(delta);
-      vsEl.className = "delta " + (delta > 0.004 ? "late" : "early");
-    } else {
-      vsEl.textContent = "—";
-      vsEl.className = "delta";
-    }
-
-    var left = state.planned - state.crossings.length;
-    var nxt = nextMust(state.goalSec, state.elapsed, left);
-    if (left <= 0) {
-      nextEl.textContent = "done";
-      if (isFinite(state.goalSec)) {
-        remEl.textContent = formatSigned(state.elapsed - state.goalSec) + " vs goal";
-        remEl.className = "remain " + (state.elapsed - state.goalSec > 0.004 ? "late" : "early");
+    if (vsEl) {
+      if (last && isFinite(evn)) {
+        var delta = last.interval - evn;
+        vsEl.textContent = formatSigned(delta);
+        vsEl.className = "delta " + (delta > 0.004 ? "late" : "early");
       } else {
-        remEl.textContent = "no goal";
-        remEl.className = "remain";
+        vsEl.textContent = "—";
+        vsEl.className = "delta";
       }
-    } else if (!isFinite(nxt)) {
-      nextEl.textContent = "set goal";
-      remEl.textContent = formatTime(state.elapsed) + " elapsed";
-      remEl.className = "remain";
-    } else {
-      nextEl.textContent = formatTime(nxt);
-      remEl.textContent = formatTime(Math.max(0, state.goalSec - state.elapsed)) + " left";
-      remEl.className = "remain";
     }
 
-    list.replaceChildren();
-    var i;
-    for (i = 0; i < state.crossings.length; i++) {
-      var c = state.crossings[i];
-      var vs = isFinite(evn) ? formatSigned(c.interval - evn) : "";
-      var li = document.createElement("li");
-      function cell(cls, text) {
-        var el = document.createElement("span");
-        el.className = cls;
-        el.textContent = text;
-        return el;
+    renderPace();
+
+    if (list) {
+      list.replaceChildren();
+      var i;
+      for (i = 0; i < state.crossings.length; i++) {
+        var c = state.crossings[i];
+        var vs = isFinite(evn) ? formatSigned(c.interval - evn) : "";
+        var li = document.createElement("li");
+        function cell(cls, text) {
+          var el = document.createElement("span");
+          el.className = cls;
+          el.textContent = text;
+          return el;
+        }
+        li.appendChild(cell("n", String(i + 1)));
+        li.appendChild(cell("name", c.name));
+        li.appendChild(cell("cum", formatTime(c.cum)));
+        li.appendChild(cell("int", formatTime(c.interval)));
+        li.appendChild(cell("vs", vs));
+        list.appendChild(li);
       }
-      li.appendChild(cell("n", String(i + 1)));
-      li.appendChild(cell("name", c.name));
-      li.appendChild(cell("cum", formatTime(c.cum)));
-      li.appendChild(cell("int", formatTime(c.interval)));
-      li.appendChild(cell("vs", vs));
-      list.appendChild(li);
     }
-    $("count").textContent = state.crossings.length + " / " + state.planned;
+    var count = $("count");
+    if (count) count.textContent = state.crossings.length + " / " + state.planned;
   }
 
   function renderChrome() {
@@ -338,8 +358,8 @@
       arm.textContent = "RESET";
       arm.disabled = false;
     } else if (state.phase === "live") {
-      arm.textContent = "ARM";
-      arm.disabled = !SplitLine.placed;
+      arm.textContent = SplitLine.placed ? "ARM" : "DRAW LINE";
+      arm.disabled = false;
     } else {
       arm.textContent = "ENABLE CAMERA";
       arm.disabled = false;
@@ -462,6 +482,28 @@
     renderChrome();
   }
 
+  function hitCue() {
+    try {
+      if (navigator.vibrate) navigator.vibrate(40);
+    } catch (e) {}
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!state.ac) state.ac = new AC();
+      if (state.ac.state === "suspended") state.ac.resume();
+      var o = state.ac.createOscillator();
+      var g = state.ac.createGain();
+      o.type = "square";
+      o.frequency.value = 1760;
+      g.gain.setValueAtTime(0.07, state.ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0001, state.ac.currentTime + 0.07);
+      o.connect(g);
+      g.connect(state.ac.destination);
+      o.start();
+      o.stop(state.ac.currentTime + 0.08);
+    } catch (e) {}
+  }
+
   function stampCrossing(source) {
     var prev = state.crossings.length
       ? state.crossings[state.crossings.length - 1].cum
@@ -475,11 +517,15 @@
       source: source || "line"
     };
     state.crossings.push(rec);
+    hitCue();
     SplitLine.flash(FLASH_MS);
-    $("stage").classList.add("hit");
-    setTimeout(function () {
-      $("stage").classList.remove("hit");
-    }, FLASH_MS);
+    var stage = $("stage");
+    if (stage) {
+      stage.classList.add("hit");
+      setTimeout(function () {
+        stage.classList.remove("hit");
+      }, FLASH_MS);
+    }
     if (state.crossings.length >= state.planned) {
       state.running = false;
       setPhase("done");
@@ -520,7 +566,7 @@
 
   function onDetectFrame(now) {
     var video = $("video");
-    var mean = SplitLine.sample(video);
+    var mean = SplitLine.sample(video, $("overlay"));
     if (mean < 0) return;
 
     if (state.phase === "calibrating") {
@@ -590,6 +636,7 @@
       }
       state.lastTick = now;
       renderClock();
+      renderPace();
     } else {
       state.lastTick = now;
     }
@@ -977,7 +1024,6 @@
     }
     fillConnectForm();
     renderChrome();
-    if (global.SplitPose) SplitPose.load();
     state.raf = requestAnimationFrame(tick);
   }
 
@@ -988,7 +1034,18 @@
     evenSplit: evenSplit,
     nextMust: nextMust
   };
-  global.SplitApp = { boot: boot, state: state, sessionPayload: sessionPayload, loadMedia: loadMedia, setup: function () { return setup; } };
+  global.SplitApp = {
+    boot: boot,
+    state: state,
+    sessionPayload: sessionPayload,
+    loadMedia: loadMedia,
+    setup: function () { return setup; },
+    renderChrome: renderChrome,
+    setPhase: setPhase,
+    stampCrossing: stampCrossing,
+    onDetectFrame: onDetectFrame,
+    resetRace: resetRace
+  };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
