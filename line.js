@@ -164,46 +164,74 @@
       var w = overlay.width;
       var h = overlay.height;
       if (!keep) ctx.clearRect(0, 0, w, h);
-      if (!this.placed && !videoEl) return;
+      if (!this.placed) return;
 
       var flashing = this.isFlashing(now);
+      var ink = flashing ? "#ffffff" : "rgba(232,255,61,0.95)";
       var x;
       var y;
+      var i;
+      var tick;
+      var dpr = Math.max(1, w / 480);
       ctx.lineCap = "butt";
       ctx.lineJoin = "miter";
+      ctx.strokeStyle = ink;
+      ctx.fillStyle = ink;
 
       if (this.orientation === "vertical") {
         x = Math.round(this.t * (w - 1)) + 0.5;
-        ctx.strokeStyle = flashing ? "#ffffff" : "rgba(232,255,61,0.95)";
-        ctx.lineWidth = flashing ? 6 : 3;
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, h);
-        ctx.stroke();
         if (flashing) {
-          ctx.strokeStyle = "rgba(255,255,255,0.35)";
-          ctx.lineWidth = 18;
+          ctx.strokeStyle = "rgba(255,255,255,0.32)";
+          ctx.lineWidth = 18 * dpr;
           ctx.beginPath();
           ctx.moveTo(x, 0);
           ctx.lineTo(x, h);
           ctx.stroke();
+          ctx.strokeStyle = ink;
         }
+        ctx.lineWidth = flashing ? 6 * dpr : 2.5 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1, dpr);
+        for (i = 0; i <= 8; i++) {
+          tick = Math.round((i / 8) * (h - 1)) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(x - (i % 2 ? 7 : 12) * dpr, tick);
+          ctx.lineTo(x + (i % 2 ? 7 : 12) * dpr, tick);
+          ctx.stroke();
+        }
+        ctx.font = (10 * dpr) + "px \"IBM Plex Mono\", ui-monospace, monospace";
+        ctx.textBaseline = "top";
+        ctx.fillText("PLANE", x + 10 * dpr, 10 * dpr);
       } else {
         y = Math.round(this.t * (h - 1)) + 0.5;
-        ctx.strokeStyle = flashing ? "#ffffff" : "rgba(232,255,61,0.95)";
-        ctx.lineWidth = flashing ? 6 : 3;
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(w, y);
-        ctx.stroke();
         if (flashing) {
-          ctx.strokeStyle = "rgba(255,255,255,0.35)";
-          ctx.lineWidth = 18;
+          ctx.strokeStyle = "rgba(255,255,255,0.32)";
+          ctx.lineWidth = 18 * dpr;
           ctx.beginPath();
           ctx.moveTo(0, y);
           ctx.lineTo(w, y);
           ctx.stroke();
+          ctx.strokeStyle = ink;
         }
+        ctx.lineWidth = flashing ? 6 * dpr : 2.5 * dpr;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1, dpr);
+        for (i = 0; i <= 8; i++) {
+          tick = Math.round((i / 8) * (w - 1)) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(tick, y - (i % 2 ? 7 : 12) * dpr);
+          ctx.lineTo(tick, y + (i % 2 ? 7 : 12) * dpr);
+          ctx.stroke();
+        }
+        ctx.font = (10 * dpr) + "px \"IBM Plex Mono\", ui-monospace, monospace";
+        ctx.textBaseline = "bottom";
+        ctx.fillText("PLANE", 10 * dpr, y - 8 * dpr);
       }
     }
   };
