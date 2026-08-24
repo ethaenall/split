@@ -58,10 +58,10 @@ A second phone on the other side, talking over a local link. Not in this submiss
 JavaScript, HTML, CSS, getUserMedia
 
 **Try it out / Website**
-LIVE_URL
+https://ethaenall.github.io/split/
 
 **GitHub repo**
-REPO_URL
+https://github.com/ethaenall/split
 
 **Demo video**
 Record the judge path. Keep it under 3 minutes. No voiceover required. Show the hand, the flash, the split.
