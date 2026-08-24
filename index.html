@@ -59,7 +59,7 @@
       padding: 0 14px 8px;
       flex-wrap: wrap;
     }
-    .chips button {
+    .chips button, .media-row label, .media-row button {
       appearance: none;
       border: 1px solid #2a2a2e;
       background: var(--card);
@@ -69,7 +69,7 @@
       font-size: 12px;
       font-weight: 650;
     }
-    .chips button.on {
+    .chips button.on, .media-row button.on {
       background: var(--ink);
       color: #111;
       border-color: var(--ink);
@@ -89,6 +89,7 @@
       overflow: hidden;
     }
     #stage.hit { outline: 3px solid #fff; outline-offset: -3px; }
+    #stage.drop { outline: 2px dashed var(--line); outline-offset: -6px; }
     #video, #overlay {
       position: absolute;
       inset: 0;
@@ -184,13 +185,14 @@
     body[data-phase="calibrating"] #arm { background: #3a3a22; color: var(--line); }
     body[data-phase="done"] #arm { background: var(--ink); color: #111; letter-spacing: 0.08em; }
     #arm:disabled { opacity: 0.85; }
-    .tune {
+    .tune, .media-row {
       display: flex;
       align-items: center;
       gap: 8px;
       padding: 4px 14px 2px;
       font-size: 11px;
       color: var(--mute);
+      flex-wrap: wrap;
     }
     .tune input[type="range"] { flex: 1; }
     .tune button, .tiny {
@@ -202,12 +204,16 @@
       font-weight: 650;
       padding: 6px 4px;
     }
-    .goals {
+    .goals, #connect {
       display: flex;
       gap: 8px;
       padding: 0 14px 8px;
     }
-    .goals label {
+    #connect {
+      flex-direction: column;
+      gap: 6px;
+    }
+    .goals label, #connect label {
       flex: 1;
       font-size: 10px;
       color: var(--mute);
@@ -215,7 +221,7 @@
       letter-spacing: 0.06em;
       font-weight: 700;
     }
-    .goals input {
+    .goals input, #connect input {
       width: 100%;
       margin-top: 3px;
       background: var(--card);
@@ -223,9 +229,19 @@
       color: var(--ink);
       border-radius: 8px;
       padding: 8px;
-      font-variant-numeric: tabular-nums;
-      font-size: 16px;
+      font-size: 14px;
     }
+    .goals input { font-variant-numeric: tabular-nums; font-size: 16px; }
+    .pair { display: flex; gap: 8px; }
+    #ai-out {
+      margin: 0;
+      min-height: 2.4em;
+      white-space: pre-wrap;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+    #sync-status { color: var(--mute); font-size: 11px; }
     footer {
       display: flex;
       justify-content: space-between;
@@ -233,13 +249,15 @@
       padding: 0 14px 10px;
     }
     #mark { text-decoration: underline; text-underline-offset: 2px; }
+    #file { position: absolute; width: 0; height: 0; opacity: 0; }
   </style>
 </head>
 <body data-phase="boot">
   <div id="banner" hidden>
     Camera is blocked on file://. In this folder run
-    <code>python3 -m http.server 8765</code>
-    then open <code>http://127.0.0.1:8765</code>
+    <code>python3 -m http.server 8767</code>
+    then open <code>http://127.0.0.1:8767</code>
+    Upload a clip still works on this page.
   </div>
   <header>
     <h1>Split</h1>
@@ -256,9 +274,9 @@
   </div>
   <div id="note">Camera is on FINISH. Crossing 1 = 400. Crossing 2 = 800.</div>
   <div id="stage">
-    <video id="video" playsinline muted autoplay></video>
+    <video id="video" playsinline muted></video>
     <canvas id="overlay"></canvas>
-    <div id="hint">Tap to place the line</div>
+    <div id="hint">Tap to place the line · drop a clip</div>
   </div>
   <div id="clock">0:00.00</div>
   <div class="row">
@@ -274,6 +292,30 @@
     <label>Goal <input id="goal" inputmode="decimal" value="2:07.04" /></label>
     <label>Crossings <input id="planned" inputmode="numeric" value="2" /></label>
   </div>
+  <div class="media-row">
+    <label for="file">Upload clip</label>
+    <input id="file" type="file" accept="video/*,.mp4,.mov,.webm,.m4v" />
+    <button type="button" id="play" hidden>Play</button>
+    <button type="button" id="connect-toggle">Connect AI</button>
+    <button type="button" id="dl-json">JSON</button>
+  </div>
+  <div id="connect" hidden>
+    <label>Webhook <input id="hook-url" placeholder="https://your-ai.local/split" autocomplete="off" /></label>
+    <label>Token <input id="hook-token" type="password" placeholder="optional" autocomplete="off" /></label>
+    <div class="pair">
+      <label>Base URL <input id="ai-base" placeholder="http://127.0.0.1:1234/v1" autocomplete="off" /></label>
+      <label>Model <input id="ai-model" placeholder="local-model" autocomplete="off" /></label>
+    </div>
+    <label>API key <input id="ai-key" type="password" placeholder="stays in this browser" autocomplete="off" /></label>
+    <label>Ask <input id="ai-q" placeholder="What did the 400 go?" /></label>
+    <div class="media-row">
+      <button type="button" id="sync-now">Sync now</button>
+      <button type="button" id="ai-ask">Send</button>
+      <button type="button" id="copy-json">Copy JSON</button>
+    </div>
+    <div id="sync-status">Off. Paste an endpoint or a local OpenAI-compatible URL.</div>
+    <pre id="ai-out"></pre>
+  </div>
   <div class="tune">
     <span>Tune</span>
     <input id="threshold" type="range" min="6" max="64" value="18" />
@@ -286,6 +328,7 @@
     <span class="tiny">The crossing is the stamp</span>
   </footer>
   <script src="line.js"></script>
+  <script src="sync.js"></script>
   <script src="split.js"></script>
 </body>
 </html>

@@ -31,6 +31,9 @@ High-school and college runners, parents on a tripod, small meets without a Fini
 - Tiny manual MARK backup
 - Event modes: 800 @ finish, 400 @ finish, 200-repeat
 - UI states the camera mark: FINISH or 200
+- Upload or drop a race clip (same line detector; clock follows the video)
+- Connect AI: webhook POST on each crossing, download/copy session JSON, optional OpenAI-compatible ask
+- Keys and tokens stay in `localStorage` on this device. No built-in coach.
 
 ## Honest geometry
 
@@ -96,7 +99,7 @@ remaining = goal − elapsed
 next = remaining / crossings_left
 ```
 
-Display is `M:SS.xx`. No coach copy. No predicted place. No AI.
+Display is `M:SS.xx`. No coach copy. No predicted place. Built-in model is none. Your endpoint is optional.
 
 ## Technical
 
@@ -104,7 +107,8 @@ Display is `M:SS.xx`. No coach copy. No predicted place. No AI.
 | --- | --- |
 | `index.html` | Shell, dark phone-wide CSS |
 | `line.js` | Place line, sample 64 luma points, draw, flash |
-| `split.js` | Camera, calibrate, detect, clock, modes, math |
+| `split.js` | Camera, file clip, calibrate, detect, clock, modes, math |
+| `sync.js` | Session JSON, webhook, last-20 log, OpenAI-compatible ask |
 | `LICENSE` | MIT, Copyright 2026 Ethan Birchenall |
 
 Vanilla JavaScript. No build step.
@@ -113,9 +117,9 @@ Detection: each frame copies the video into an offscreen canvas, reads a 1-pixel
 
 ## Built vs not
 
-Fully built: local webcam loop, line, calibrate, ARM, detect, splits, even-split math, three modes.
+Fully built: local webcam loop, uploaded clip, line, calibrate, ARM, detect, splits, even-split math, three modes, webhook/JSON sync, optional BYO model.
 
-Not in scope: two-camera 200+finish, official photo finish, lane IDs, meet management, accounts, models.
+Not in scope: two-camera 200+finish, official photo finish, lane IDs, meet management, accounts, a hosted model.
 
 Numbers not provided by Ethan are written UNKNOWN.
 

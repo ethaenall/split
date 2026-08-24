@@ -116,7 +116,12 @@
     lastDetectAt: 0,
     spikeRun: 0,
     energy: 0,
-    overlayDirty: true
+    overlayDirty: true,
+    source: "camera",
+    fileUrl: null,
+    fileName: null,
+    mediaT0: 0,
+    syncBusy: false
   };
 
   function eventDef() {
@@ -150,6 +155,77 @@
 
   function fileBlocked() {
     return location.protocol === "file:";
+  }
+
+  function videoEl() {
+    return $("video");
+  }
+
+  function hasFeed() {
+    var v = videoEl();
+    if (state.stream) return true;
+    if (state.source === "file" && v && v.readyState >= 2) return true;
+    return false;
+  }
+
+  function stopCamera() {
+    if (state.stream) {
+      state.stream.getTracks().forEach(function (t) {
+        t.stop();
+      });
+      state.stream = null;
+    }
+    var v = videoEl();
+    if (v && v.srcObject) v.srcObject = null;
+  }
+
+  function sessionPayload(kind, extra) {
+    var evn = evenSplit(state.goalSec, state.planned);
+    var left = state.planned - state.crossings.length;
+    return {
+      app: "split",
+      kind: kind || "session",
+      mark: state.mark,
+      event: state.eventId,
+      goal: state.goalText,
+      goalSec: isFinite(state.goalSec) ? state.goalSec : null,
+      planned: state.planned,
+      elapsed: state.elapsed,
+      even: isFinite(evn) ? evn : null,
+      nextMust: nextMust(state.goalSec, state.elapsed, left),
+      source: state.source,
+      media: state.fileName || null,
+      crossings: state.crossings.map(function (c) {
+        return {
+          name: c.name,
+          cum: c.cum,
+          interval: c.interval,
+          source: c.source
+        };
+      }),
+      extra: extra || null
+    };
+  }
+
+  function setSyncStatus(text) {
+    var el = $("sync-status");
+    if (el) el.textContent = text;
+  }
+
+  function pushSync(kind, extra) {
+    if (!global.SplitSync) return;
+    var payload = sessionPayload(kind, extra);
+    SplitSync.rememberSession(payload);
+    var cfg = SplitSync.loadCfg();
+    if (!cfg.webhook) return;
+    SplitSync.postWebhook(cfg, payload)
+      .then(function (r) {
+        if (r.skip) return;
+        setSyncStatus(r.ok ? "Synced " + kind : r.detail);
+      })
+      .catch(function () {
+        setSyncStatus("Webhook blocked (CORS) — copy JSON instead");
+      });
   }
 
   function setPhase(p) {
@@ -284,6 +360,13 @@
       arm.disabled = false;
     }
 
+    var play = $("play");
+    if (play) {
+      play.hidden = state.source !== "file";
+      var v = videoEl();
+      play.textContent = v && !v.paused && !v.ended ? "Pause" : "Play";
+    }
+
     $("banner").hidden = !fileBlocked();
     renderClock();
     renderSplits();
@@ -314,7 +397,7 @@
       state.calFrames = 0;
     }
     if (state.phase === "armed" || state.phase === "running" || state.phase === "done" || state.phase === "calibrating") {
-      setPhase(state.stream ? "live" : "boot");
+      setPhase(hasFeed() ? "live" : "boot");
     }
     renderChrome();
   }
@@ -342,12 +425,18 @@
       setPhase("done");
     }
     renderChrome();
+    pushSync("crossing", rec);
+    if (state.phase === "done") pushSync("session", { done: true });
   }
 
   function beginCalibrate() {
     state.cal = null;
     state.calFrames = 0;
     state.calUntil = performance.now() + CALIBRATE_MS;
+    if (state.source === "file") {
+      var v = videoEl();
+      if (v && v.paused) v.play().catch(function () {});
+    }
     setPhase("calibrating");
     renderChrome();
   }
@@ -359,7 +448,14 @@
     state.lastTick = state.armedAt;
     state.elapsed = 0;
     state.lastDetectAt = state.armedAt;
+    if (state.source === "file") {
+      var v = videoEl();
+      state.mediaT0 = v ? v.currentTime : 0;
+    } else {
+      state.mediaT0 = 0;
+    }
     renderChrome();
+    pushSync("armed");
   }
 
   function onDetectFrame(now) {
@@ -413,20 +509,25 @@
   function tick(now) {
     state.raf = requestAnimationFrame(tick);
     if (state.running && (state.phase === "armed" || state.phase === "running")) {
-      if (!state.lastTick) state.lastTick = now;
-      state.elapsed += (now - state.lastTick) / 1000;
+      if (state.source === "file") {
+        var v = videoEl();
+        state.elapsed = v ? Math.max(0, v.currentTime - state.mediaT0) : state.elapsed;
+      } else {
+        if (!state.lastTick) state.lastTick = now;
+        state.elapsed += (now - state.lastTick) / 1000;
+      }
       state.lastTick = now;
       renderClock();
     } else {
       state.lastTick = now;
     }
 
-    if (state.stream && SplitLine.placed) {
+    if (hasFeed() && SplitLine.placed) {
       if (state.phase === "calibrating" || state.phase === "armed" || state.phase === "running") {
         onDetectFrame(now);
       }
     }
-    if (SplitLine.placed) SplitLine.draw($("overlay"), $("video"), now);
+    if (SplitLine.placed) SplitLine.draw($("overlay"), videoEl(), now);
     $("energy").textContent = state.energy ? state.energy.toFixed(1) : "0.0";
   }
 
@@ -450,8 +551,15 @@
           height: { ideal: 720 }
         }
       });
+      if (state.fileUrl) {
+        URL.revokeObjectURL(state.fileUrl);
+        state.fileUrl = null;
+      }
+      state.fileName = null;
+      state.source = "camera";
       state.stream = stream;
-      var video = $("video");
+      var video = videoEl();
+      video.removeAttribute("src");
       video.srcObject = stream;
       video.muted = true;
       video.playsInline = true;
@@ -471,7 +579,7 @@
       resetRace(true);
       return;
     }
-    if (state.phase === "boot" || state.phase === "blocked") {
+    if (!hasFeed() && (state.phase === "boot" || state.phase === "blocked")) {
       startCamera();
       return;
     }
@@ -485,8 +593,38 @@
     beginCalibrate();
   }
 
+  function loadMedia(file) {
+    if (!file) return;
+    if (!/^video\//.test(file.type) && !/\.(mp4|mov|webm|m4v)$/i.test(file.name || "")) {
+      $("note").textContent = "Need a video clip. Photos have no crossing.";
+      return;
+    }
+    stopCamera();
+    if (state.fileUrl) URL.revokeObjectURL(state.fileUrl);
+    state.fileUrl = URL.createObjectURL(file);
+    state.fileName = file.name || "clip";
+    state.source = "file";
+    var video = videoEl();
+    video.srcObject = null;
+    video.src = state.fileUrl;
+    video.muted = true;
+    video.playsInline = true;
+    video.onloadeddata = function () {
+      video.pause();
+      video.currentTime = 0;
+      setPhase("live");
+      $("note").textContent = "Clip loaded. Draw the line, then ARM. Clock follows the video.";
+      renderChrome();
+      resizeOverlay();
+    };
+    video.onerror = function () {
+      $("note").textContent = "That clip would not play in this browser.";
+    };
+    video.load();
+  }
+
   function onStagePointer(ev) {
-    if (!state.stream) return;
+    if (!hasFeed()) return;
     ev.preventDefault();
     SplitLine.placeFromEvent($("stage"), ev);
     if (state.phase === "armed" || state.phase === "running" || state.phase === "calibrating" || state.phase === "done") {
@@ -495,6 +633,27 @@
     }
     drawLine();
     renderChrome();
+  }
+
+  function fillConnectForm() {
+    if (!global.SplitSync) return;
+    var cfg = SplitSync.loadCfg();
+    if ($("hook-url")) $("hook-url").value = cfg.webhook || "";
+    if ($("hook-token")) $("hook-token").value = cfg.token || "";
+    if ($("ai-base")) $("ai-base").value = cfg.base || "";
+    if ($("ai-model")) $("ai-model").value = cfg.model || "";
+    if ($("ai-key")) $("ai-key").value = cfg.key || "";
+    if (cfg.webhook || cfg.base) setSyncStatus("Ready. Crossings POST to your webhook. Ask uses your model.");
+  }
+
+  function readConnectForm() {
+    return {
+      webhook: $("hook-url") ? $("hook-url").value.trim() : "",
+      token: $("hook-token") ? $("hook-token").value : "",
+      base: $("ai-base") ? $("ai-base").value.trim() : "",
+      model: $("ai-model") ? $("ai-model").value.trim() : "",
+      key: $("ai-key") ? $("ai-key").value : ""
+    };
   }
 
   function bind() {
@@ -543,6 +702,85 @@
 
     var stage = $("stage");
     stage.addEventListener("pointerdown", onStagePointer);
+    stage.addEventListener("dragover", function (ev) {
+      ev.preventDefault();
+      stage.classList.add("drop");
+    });
+    stage.addEventListener("dragleave", function () {
+      stage.classList.remove("drop");
+    });
+    stage.addEventListener("drop", function (ev) {
+      ev.preventDefault();
+      stage.classList.remove("drop");
+      var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (f) loadMedia(f);
+    });
+
+    $("file").addEventListener("change", function () {
+      var f = $("file").files && $("file").files[0];
+      if (f) loadMedia(f);
+      $("file").value = "";
+    });
+    $("play").addEventListener("click", function () {
+      var v = videoEl();
+      if (!v || state.source !== "file") return;
+      if (v.paused || v.ended) v.play().catch(function () {});
+      else v.pause();
+      renderChrome();
+    });
+    $("connect-toggle").addEventListener("click", function () {
+      var box = $("connect");
+      box.hidden = !box.hidden;
+      $("connect-toggle").classList.toggle("on", !box.hidden);
+    });
+    $("dl-json").addEventListener("click", function () {
+      if (!global.SplitSync) return;
+      SplitSync.downloadJson(sessionPayload("session"), "split-session.json");
+    });
+    $("copy-json").addEventListener("click", function () {
+      if (!global.SplitSync) return;
+      SplitSync.copyJson(sessionPayload("session")).then(function (ok) {
+        setSyncStatus(ok ? "JSON copied" : "Copy failed");
+      });
+    });
+    $("sync-now").addEventListener("click", function () {
+      if (!global.SplitSync) return;
+      var cfg = readConnectForm();
+      SplitSync.saveCfg(cfg);
+      var payload = sessionPayload("session", { manual: true });
+      SplitSync.rememberSession(payload);
+      setSyncStatus("Syncing…");
+      SplitSync.postWebhook(cfg, payload)
+        .then(function (r) {
+          setSyncStatus(r.skip ? "Saved. Add a webhook to push." : r.detail);
+        })
+        .catch(function () {
+          setSyncStatus("Webhook blocked (CORS) — copy JSON instead");
+        });
+    });
+    $("ai-ask").addEventListener("click", function () {
+      if (!global.SplitSync) return;
+      var cfg = readConnectForm();
+      SplitSync.saveCfg(cfg);
+      var q = $("ai-q").value.trim();
+      $("ai-out").textContent = "…";
+      SplitSync.askModel(cfg, sessionPayload("ask"), q)
+        .then(function (r) {
+          $("ai-out").textContent = r.ok ? r.text : r.detail;
+          setSyncStatus(r.ok ? "Model replied" : r.detail);
+        })
+        .catch(function () {
+          $("ai-out").textContent = "Request blocked. Local models (Ollama / LM Studio / Hermes proxy) work. Cloud APIs often need a local relay.";
+          setSyncStatus("Model fetch blocked");
+        });
+    });
+    ["hook-url", "hook-token", "ai-base", "ai-model", "ai-key"].forEach(function (id) {
+      var el = $(id);
+      if (!el) return;
+      el.addEventListener("change", function () {
+        if (global.SplitSync) SplitSync.saveCfg(readConnectForm());
+      });
+    });
 
     window.addEventListener("resize", function () {
       resizeOverlay();
@@ -559,6 +797,7 @@
     } else {
       setPhase("boot");
     }
+    fillConnectForm();
     renderChrome();
     state.raf = requestAnimationFrame(tick);
   }
@@ -570,7 +809,7 @@
     evenSplit: evenSplit,
     nextMust: nextMust
   };
-  global.SplitApp = { boot: boot, state: state };
+  global.SplitApp = { boot: boot, state: state, sessionPayload: sessionPayload, loadMedia: loadMedia };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
