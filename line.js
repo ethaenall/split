@@ -164,7 +164,6 @@
       var w = overlay.width;
       var h = overlay.height;
       if (!keep) ctx.clearRect(0, 0, w, h);
-      if (!this.placed) return;
 
       var flashing = this.isFlashing(now);
       var ink = flashing ? "#ffffff" : "rgba(232,255,61,0.95)";

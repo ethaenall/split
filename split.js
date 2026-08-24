@@ -75,6 +75,7 @@
     crossings: [],
     lastDetectAt: 0,
     spikeRun: 0,
+    hold: false,
     energy: 0,
     overlayDirty: true,
     source: "camera",
@@ -218,7 +219,11 @@
 
   function updateWireLabel() {
     var el = $("wire");
-    if (!el || !global.SplitPose) return;
+    if (!el) return;
+    if (!global.SplitPose) {
+      if (el.textContent !== "Plane") el.textContent = "Plane";
+      return;
+    }
     var p = SplitPose;
     var next;
     if (!p.enabled) next = "Wire off";
@@ -236,7 +241,7 @@
     var ctx = overlay.getContext("2d");
     ctx.clearRect(0, 0, overlay.width, overlay.height);
     if (global.SplitPose && SplitPose.enabled) SplitPose.draw(overlay, videoEl());
-    if (SplitLine.placed) SplitLine.draw(overlay, videoEl(), now || performance.now(), true);
+    SplitLine.draw(overlay, videoEl(), now || performance.now(), true);
   }
 
   function drawLine() {
@@ -245,7 +250,25 @@
 
   function renderClock() {
     var el = $("clock");
-    if (el) el.textContent = formatTime(state.elapsed);
+    if (!el) return;
+    var text = formatTime(state.elapsed);
+    var prev = el.getAttribute ? el.getAttribute("data-raw") : el._raw;
+    if (prev === text) return;
+    if (el.setAttribute) el.setAttribute("data-raw", text);
+    else el._raw = text;
+    if (!el.replaceChildren) {
+      el.textContent = text;
+      return;
+    }
+    el.replaceChildren();
+    String(text).split(/([:.])/).forEach(function (part) {
+      if (!part) return;
+      var span = document.createElement("span");
+      span.textContent = part;
+      if (part === ":") span.className = "sep colon";
+      else if (part === ".") span.className = "sep dot";
+      if (el.appendChild) el.appendChild(span);
+    });
   }
 
   function setText(el, text) {
@@ -471,6 +494,7 @@
     state.armedAt = 0;
     state.lastDetectAt = 0;
     state.spikeRun = 0;
+    state.hold = false;
     if (global.SplitPose) SplitPose.resetTrack();
     if (!keepCal) {
       state.cal = null;
@@ -554,6 +578,7 @@
     state.lastTick = state.armedAt;
     state.elapsed = 0;
     state.lastDetectAt = state.armedAt;
+    state.hold = false;
     if (state.source === "file") {
       var v = videoEl();
       state.mediaT0 = v ? v.currentTime : 0;
@@ -589,6 +614,7 @@
 
     var quiet = energy < state.threshold * 0.45;
     if (quiet) {
+      state.hold = false;
       var j;
       for (j = 0; j < state.cal.length; j++) {
         state.cal[j] = state.cal[j] * (1 - detectCfg().ema) + SplitLine.profile[j] * detectCfg().ema;
@@ -596,6 +622,10 @@
     }
 
     if (!(state.phase === "armed" || state.phase === "running")) return;
+    if (state.hold) {
+      state.spikeRun = 0;
+      return;
+    }
     if (now - state.lastDetectAt < detectCfg().debounceMs) {
       state.spikeRun = 0;
       return;
@@ -607,6 +637,7 @@
     if (state.spikeRun >= detectCfg().spikeFrames) {
       if (state.phase === "armed") setPhase("running");
       state.spikeRun = 0;
+      state.hold = true;
       state.lastDetectAt = now;
       stampCrossing("line");
     }
@@ -614,11 +645,13 @@
 
   function maybePoseCrossing(now) {
     if (!global.SplitPose || !SplitPose.enabled || SplitPose.status !== "ready") return false;
+    if (state.hold) return false;
     if (!(state.phase === "armed" || state.phase === "running")) return false;
     if (now - state.lastDetectAt < detectCfg().debounceMs) return false;
     if (!SplitPose.crossedLine(SplitLine, videoEl(), $("overlay"))) return false;
     if (state.phase === "armed") setPhase("running");
     state.spikeRun = 0;
+    state.hold = true;
     state.lastDetectAt = now;
     stampCrossing("pose");
     return true;
@@ -689,6 +722,7 @@
       video.muted = true;
       video.playsInline = true;
       await video.play();
+      SplitLine.placed = true;
       setPhase("live");
       if (global.SplitPose) SplitPose.load();
       renderChrome();
@@ -738,8 +772,9 @@
     video.onloadeddata = function () {
       video.pause();
       video.currentTime = 0;
+      SplitLine.placed = true;
       setPhase("live");
-      $("note").textContent = "Clip loaded. Draw the line, then ARM. Clock follows the video.";
+      $("note").textContent = "Clip loaded. Tap to move the plane, then ARM.";
       if (global.SplitPose) SplitPose.load();
       renderChrome();
       resizeOverlay();

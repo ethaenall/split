@@ -235,5 +235,39 @@ check("two hot frames stamp a luma crossing", function () {
   assert.strictEqual(payload.mark, "FINISH");
 });
 
+check("one occupancy is one stamp even after debounce", function () {
+  var ctx = loadApp();
+  var app = ctx.SplitApp;
+  app.state.phase = "running";
+  app.state.running = true;
+  app.state.cal = Float32Array.from([10, 10, 10, 10]);
+  app.state.threshold = 18;
+  app.state.lastDetectAt = -1e9;
+  app.state.spikeRun = 0;
+  app.state.hold = false;
+  app.state.elapsed = 10;
+  ctx.SplitLine.placed = true;
+  ctx.SplitLine.sample = function () {
+    ctx.SplitLine.profile = Float32Array.from([40, 40, 40, 40]);
+    return 40;
+  };
+  ctx.SplitLine.energyAgainst = function () { return 30; };
+  app.onDetectFrame(0);
+  app.onDetectFrame(16);
+  assert.strictEqual(app.state.crossings.length, 1);
+  var t;
+  for (t = 900; t <= 4000; t += 16) {
+    app.onDetectFrame(t);
+  }
+  assert.strictEqual(app.state.crossings.length, 1, "sustained occupancy must not re-stamp");
+  ctx.SplitLine.energyAgainst = function () { return 2; };
+  app.onDetectFrame(4100);
+  app.onDetectFrame(4116);
+  ctx.SplitLine.energyAgainst = function () { return 30; };
+  app.onDetectFrame(4200);
+  app.onDetectFrame(4216);
+  assert.strictEqual(app.state.crossings.length, 2, "a new occupancy after quiet should stamp");
+});
+
 console.log(passed + " passed, " + failed + " failed");
 process.exit(failed ? 1 : 0);
