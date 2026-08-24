@@ -15,11 +15,11 @@ Default demo: camera on FINISH, event 800. Crossing 1 = 400 split. Crossing 2 = 
 ## Run
 
 ```bash
-cd /Users/Ethan/workspace/split
-python3 -m http.server 8765
+cd "/Users/Ethan/Library/Mobile Documents/com~apple~CloudDocs/hackathons/split"
+python3 -m http.server 8767
 ```
 
-Open http://127.0.0.1:8765
+Open http://127.0.0.1:8767
 
 Camera is blocked on `file://`. Use the server.
 

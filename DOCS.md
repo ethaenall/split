@@ -41,11 +41,11 @@ A 400m oval puts the 200 and the finish on opposite sides. One phone cannot see 
 No npm. No frameworks. Static files.
 
 ```bash
-cd /Users/Ethan/workspace/split
-python3 -m http.server 8765
+cd "/Users/Ethan/Library/Mobile Documents/com~apple~CloudDocs/hackathons/split"
+python3 -m http.server 8767
 ```
 
-Open `http://127.0.0.1:8765`. HTTPS or localhost is required for the camera. `file://` is blocked by the browser; the page says so and prints the server command.
+Open `http://127.0.0.1:8767`. HTTPS or localhost is required for the camera. `file://` is blocked by the browser; the page says so and prints the server command.
 
 GitHub Pages (HTTPS) is the public judge URL once the repo is pushed.
 
