@@ -39,6 +39,7 @@ Connect AI is optional. Paste a webhook. Every crossing POSTs JSON. Or download 
 | Upload / drop a race clip | Official FAT / photo-finish pixels |
 | 1s empty-line calibrate, then ARM | Lane assignment, built-in coach |
 | Luma sample vs short baseline, 800ms debounce | Cloud accounts |
+| Wireframe bodies (MediaPipe Pose CDN). Hip crossing also stamps | Lane IDs |
 | BYO AI: webhook sync, JSON, OpenAI-compatible ask | |
 | Configurable events / marks / labels / detect | |
 

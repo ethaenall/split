@@ -22,6 +22,7 @@ High-school and college runners, parents on a tripod, small meets without a Fini
 - Click or tap to place a line (vertical default, toggle horizontal)
 - One second empty-line calibrate, then ARM
 - Luma sampled along the line each frame against a short baseline
+- Optional body wireframe (MediaPipe Pose, CDN). A hip that crosses the line also stamps
 - Spike + 800ms debounce = crossing
 - Line flash on detect
 - Giant clock
@@ -63,7 +64,7 @@ GitHub Pages (HTTPS) is the public judge URL once the repo is pushed.
 6. Clock starts when ARM finishes calibrate. That is the gun. On a clip, the clock follows the video.
 7. Each body that crosses stamps cumulative time and the interval.
 8. Read this interval vs even split, and what the next interval must be.
-9. Tune threshold, debounce, and calibrate in Setup if the line is too hot or too deaf.
+9. Tune threshold, debounce, and calibrate in Setup if the line is too hot or too deaf. Wire draws stick figures on bodies; turn it off if the CDN is blocked.
 10. MARK is a last-resort tap.
 
 ### Stock events
@@ -85,6 +86,7 @@ Everything in that table is editable. Add events and marks. Export JSON or share
 | --- | --- | --- |
 | Threshold | Mean absolute luma change that counts as a spike | 18 |
 | Orientation | Vertical or horizontal line | Vertical |
+| Wire | Body stick-figure overlay; hip-cross can stamp | on |
 | Goal | Race goal, `M:SS.xx` or `SS.xx` | empty |
 | Crossings | Planned hits at this camera | per event |
 | Debounce | Quiet window after a hit | 800ms, editable |
@@ -109,6 +111,7 @@ Display is `M:SS.xx`. No coach copy. No predicted place. Built-in model is none.
 | --- | --- |
 | `index.html` | Shell, dark phone-wide CSS |
 | `line.js` | Place line, sample 64 luma points, draw, flash |
+| `pose.js` | MediaPipe Pose wireframes + hip-cross (CDN; optional) |
 | `config.js` | Meet setup: events, marks, detect, URL, import/export |
 | `split.js` | Camera, file clip, calibrate, detect, clock, math |
 | `sync.js` | Session JSON, webhook, last-20 log, OpenAI-compatible ask |
@@ -116,11 +119,11 @@ Display is `M:SS.xx`. No coach copy. No predicted place. Built-in model is none.
 
 Vanilla JavaScript. No build step.
 
-Detection: each frame copies the video into an offscreen canvas, reads a 1-pixel strip on the line, compares the 64-point profile to the baseline, triggers when energy ≥ threshold for 2 frames, then ignores the line for 800ms.
+Detection: each frame copies the video into an offscreen canvas, reads a 1-pixel strip on the line, compares the 64-point profile to the baseline, triggers when energy ≥ threshold for 2 frames, then ignores the line for 800ms. If the Pose model loaded, stick figures are drawn on people and a hip that crosses the line also stamps (`source: pose`). If the CDN or model fails, luma still works.
 
 ## Built vs not
 
-Fully built: local webcam loop, uploaded clip, line, calibrate, ARM, detect, splits, even-split math, three modes, webhook/JSON sync, optional BYO model.
+Fully built: local webcam loop, uploaded clip, line, calibrate, ARM, luma detect, optional pose wireframes, splits, even-split math, configurable events, webhook/JSON sync, optional BYO model.
 
 Not in scope: two-camera 200+finish, official photo finish, lane IDs, meet management, accounts, a hosted model.
 

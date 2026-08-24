@@ -128,11 +128,11 @@
       return Float32Array.from(this.profile);
     },
 
-    draw: function (overlay, videoEl, now) {
+    draw: function (overlay, videoEl, now, keep) {
       var ctx = overlay.getContext("2d");
       var w = overlay.width;
       var h = overlay.height;
-      ctx.clearRect(0, 0, w, h);
+      if (!keep) ctx.clearRect(0, 0, w, h);
       if (!this.placed && !videoEl) return;
 
       var flashing = this.isFlashing(now);

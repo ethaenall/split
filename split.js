@@ -216,9 +216,31 @@
     }
   }
 
-  function drawLine() {
+  function updateWireLabel() {
+    var el = $("wire");
+    if (!el || !global.SplitPose) return;
+    var p = SplitPose;
+    var next;
+    if (!p.enabled) next = "Wire off";
+    else if (p.status === "loading") next = "Wire…";
+    else if (p.status === "fail") next = "Luma only";
+    else if (p.people.length) next = "Wire " + p.people.length;
+    else next = "Wire";
+    if (el.textContent !== next) el.textContent = next;
+  }
+
+  function paintOverlay(now) {
     resizeOverlay();
-    SplitLine.draw($("overlay"), $("video"), performance.now());
+    var overlay = $("overlay");
+    if (!overlay) return;
+    var ctx = overlay.getContext("2d");
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if (global.SplitPose && SplitPose.enabled) SplitPose.draw(overlay, videoEl());
+    if (SplitLine.placed) SplitLine.draw(overlay, videoEl(), now || performance.now(), true);
+  }
+
+  function drawLine() {
+    paintOverlay(performance.now());
   }
 
   function renderClock() {
@@ -300,6 +322,7 @@
     $("threshold").value = String(state.threshold);
     $("th-val").textContent = String(state.threshold);
     $("orient").textContent = SplitLine.orientation === "vertical" ? "Vertical" : "Horizontal";
+    updateWireLabel();
 
     renderEventChips();
     renderMarkChips();
@@ -428,6 +451,7 @@
     state.armedAt = 0;
     state.lastDetectAt = 0;
     state.spikeRun = 0;
+    if (global.SplitPose) SplitPose.resetTrack();
     if (!keepCal) {
       state.cal = null;
       state.calFrames = 0;
@@ -542,6 +566,18 @@
     }
   }
 
+  function maybePoseCrossing(now) {
+    if (!global.SplitPose || !SplitPose.enabled || SplitPose.status !== "ready") return false;
+    if (!(state.phase === "armed" || state.phase === "running")) return false;
+    if (now - state.lastDetectAt < detectCfg().debounceMs) return false;
+    if (!SplitPose.crossedLine(SplitLine, videoEl(), $("overlay"))) return false;
+    if (state.phase === "armed") setPhase("running");
+    state.spikeRun = 0;
+    state.lastDetectAt = now;
+    stampCrossing("pose");
+    return true;
+  }
+
   function tick(now) {
     state.raf = requestAnimationFrame(tick);
     if (state.running && (state.phase === "armed" || state.phase === "running")) {
@@ -558,13 +594,19 @@
       state.lastTick = now;
     }
 
+    resizeOverlay();
+    if (hasFeed() && global.SplitPose && SplitPose.enabled) SplitPose.infer(videoEl(), now);
+
     if (hasFeed() && SplitLine.placed) {
-      if (state.phase === "calibrating" || state.phase === "armed" || state.phase === "running") {
+      if (state.phase === "calibrating") onDetectFrame(now);
+      else if (state.phase === "armed" || state.phase === "running") {
+        maybePoseCrossing(now);
         onDetectFrame(now);
       }
     }
-    if (SplitLine.placed) SplitLine.draw($("overlay"), videoEl(), now);
+    paintOverlay(now);
     $("energy").textContent = state.energy ? state.energy.toFixed(1) : "0.0";
+    updateWireLabel();
   }
 
   async function startCamera() {
@@ -601,6 +643,7 @@
       video.playsInline = true;
       await video.play();
       setPhase("live");
+      if (global.SplitPose) SplitPose.load();
       renderChrome();
       resizeOverlay();
     } catch (err) {
@@ -650,6 +693,7 @@
       video.currentTime = 0;
       setPhase("live");
       $("note").textContent = "Clip loaded. Draw the line, then ARM. Clock follows the video.";
+      if (global.SplitPose) SplitPose.load();
       renderChrome();
       resizeOverlay();
     };
@@ -703,6 +747,13 @@
       if (SplitLine.placed) drawLine();
       renderChrome();
     });
+    if ($("wire")) {
+      $("wire").addEventListener("click", function () {
+        if (!global.SplitPose) return;
+        SplitPose.setEnabled(!SplitPose.enabled);
+        updateWireLabel();
+      });
+    }
     $("threshold").addEventListener("input", function () {
       state.threshold = Number($("threshold").value);
       $("th-val").textContent = String(state.threshold);
@@ -926,6 +977,7 @@
     }
     fillConnectForm();
     renderChrome();
+    if (global.SplitPose) SplitPose.load();
     state.raf = requestAnimationFrame(tick);
   }
 
