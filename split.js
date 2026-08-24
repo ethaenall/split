@@ -2,49 +2,9 @@
 (function (global) {
   "use strict";
 
-  var DEBOUNCE_MS = 800;
-  var CALIBRATE_MS = 1000;
   var FLASH_MS = 240;
-  var BASELINE_EMA = 0.08;
-  var SPIKE_FRAMES = 2;
 
-  var EVENTS = {
-    "800": {
-      id: "800",
-      label: "800",
-      planned: 2,
-      defaultMark: "FINISH",
-      defaultGoal: "2:07.04",
-      names: function (mark) {
-        if (mark === "FINISH") return ["400", "800"];
-        return ["200", "600"];
-      }
-    },
-    "400": {
-      id: "400",
-      label: "400",
-      planned: 1,
-      defaultMark: "FINISH",
-      defaultGoal: "0:55.25",
-      names: function (mark) {
-        if (mark === "FINISH") return ["400"];
-        return ["200"];
-      }
-    },
-    "200": {
-      id: "200",
-      label: "200-repeat",
-      planned: 4,
-      defaultMark: "200",
-      defaultGoal: "",
-      names: function (_mark, planned) {
-        var out = [];
-        var i;
-        for (i = 0; i < planned; i++) out.push("200 #" + (i + 1));
-        return out;
-      }
-    }
-  };
+  var setup = null;
 
   function $(id) {
     return document.getElementById(id);
@@ -100,8 +60,8 @@
     eventId: "800",
     mark: "FINISH",
     planned: 2,
-    goalSec: 127.04,
-    goalText: "2:07.04",
+    goalSec: NaN,
+    goalText: "",
     threshold: 18,
     stream: null,
     raf: 0,
@@ -125,32 +85,38 @@
   };
 
   function eventDef() {
-    return EVENTS[state.eventId];
+    return setup ? SplitSetup.eventById(setup, state.eventId) : null;
+  }
+
+  function detectCfg() {
+    return (setup && setup.detect) || {
+      threshold: 18,
+      debounceMs: 800,
+      calibrateMs: 1000,
+      spikeFrames: 2,
+      ema: 0.08
+    };
+  }
+
+  function persistSetup() {
+    if (!setup || !global.SplitSetup) return;
+    SplitSetup.save(setup);
+    SplitSetup.writeQuery(setup);
   }
 
   function splitName(index) {
     var ev = eventDef();
-    var names = ev.names(state.mark, state.planned);
-    return names[index] || String(index + 1);
+    var names = SplitSetup.labelsFor(ev, state.mark, state.planned);
+    return names[index] || "Hit " + (index + 1);
   }
 
   function geometryNote() {
-    if (state.eventId === "800" && state.mark === "FINISH") {
-      return "Camera is on FINISH. Crossing 1 = 400. Crossing 2 = 800.";
-    }
-    if (state.eventId === "800" && state.mark === "200") {
-      return "Camera is on 200. This mark will not see 400 or finish. Opposite side of the track.";
-    }
-    if (state.eventId === "400" && state.mark === "FINISH") {
-      return "Camera is on FINISH. One crossing = 400.";
-    }
-    if (state.eventId === "400" && state.mark === "200") {
-      return "Camera is on 200. This mark will not see the 400 finish. Opposite side of the track.";
-    }
-    if (state.eventId === "200" && state.mark === "200") {
-      return "Camera is on 200. Each crossing is one 200.";
-    }
-    return "Camera is on FINISH. 200-repeat from finish is a 400 if they run full laps.";
+    var ev = eventDef();
+    var names = SplitSetup.labelsFor(ev, state.mark, state.planned);
+    var line = "Camera is on " + state.mark + ".";
+    if (ev && ev.note) return line + " " + ev.note;
+    if (names.length) return line + " Crossings: " + names.join(", ") + ". One camera sees one mark.";
+    return line + " One camera sees one mark.";
   }
 
   function fileBlocked() {
@@ -185,8 +151,11 @@
     return {
       app: "split",
       kind: kind || "session",
+      athlete: setup && setup.athlete ? setup.athlete : "",
+      meet: setup && setup.meet ? setup.meet : "",
       mark: state.mark,
       event: state.eventId,
+      eventLabel: eventDef() ? eventDef().label : state.eventId,
       goal: state.goalText,
       goalSec: isFinite(state.goalSec) ? state.goalSec : null,
       planned: state.planned,
@@ -332,15 +301,8 @@
     $("th-val").textContent = String(state.threshold);
     $("orient").textContent = SplitLine.orientation === "vertical" ? "Vertical" : "Horizontal";
 
-    var chips = document.querySelectorAll("[data-event]");
-    var i;
-    for (i = 0; i < chips.length; i++) {
-      chips[i].classList.toggle("on", chips[i].getAttribute("data-event") === state.eventId);
-    }
-    var marks = document.querySelectorAll("[data-mark]");
-    for (i = 0; i < marks.length; i++) {
-      marks[i].classList.toggle("on", marks[i].getAttribute("data-mark") === state.mark);
-    }
+    renderEventChips();
+    renderMarkChips();
 
     var arm = $("arm");
     if (state.phase === "calibrating") {
@@ -373,15 +335,89 @@
     $("energy").textContent = state.energy ? state.energy.toFixed(1) : "0.0";
   }
 
+  function renderEventChips() {
+    var host = $("event-chips");
+    if (!host || !setup) return;
+    host.replaceChildren();
+    setup.events.forEach(function (ev) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = ev.label;
+      b.className = ev.id === state.eventId ? "on" : "";
+      b.addEventListener("click", function () {
+        applyEvent(ev.id);
+      });
+      host.appendChild(b);
+    });
+  }
+
+  function renderMarkChips() {
+    var host = $("mark-chips");
+    if (!host || !setup) return;
+    host.replaceChildren();
+    setup.marks.forEach(function (m) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.textContent = m;
+      b.className = m === state.mark ? "on" : "";
+      b.addEventListener("click", function () {
+        state.mark = m;
+        setup.mark = m;
+        persistSetup();
+        fillSetupForm();
+        renderChrome();
+      });
+      host.appendChild(b);
+    });
+  }
+
+  function fillSetupForm() {
+    if (!setup) return;
+    var ev = eventDef();
+    if ($("cfg-athlete")) $("cfg-athlete").value = setup.athlete || "";
+    if ($("cfg-meet")) $("cfg-meet").value = setup.meet || "";
+    if (ev) {
+      if ($("cfg-label")) $("cfg-label").value = ev.label;
+      if ($("cfg-def-mark")) $("cfg-def-mark").value = ev.defaultMark || "";
+      if ($("cfg-labels")) $("cfg-labels").value = SplitSetup.labelsFor(ev, state.mark, ev.planned).join(", ");
+      if ($("cfg-note")) $("cfg-note").value = ev.note || "";
+    }
+    if ($("cfg-cal")) $("cfg-cal").value = String(detectCfg().calibrateMs);
+    if ($("cfg-deb")) $("cfg-deb").value = String(detectCfg().debounceMs);
+  }
+
   function applyEvent(id) {
-    var ev = EVENTS[id];
+    var ev = setup ? SplitSetup.eventById(setup, id) : null;
     if (!ev) return;
-    state.eventId = id;
-    state.mark = ev.defaultMark;
+    state.eventId = ev.id;
+    setup.activeEventId = ev.id;
+    if (ev.defaultMark) {
+      state.mark = ev.defaultMark;
+      setup.mark = ev.defaultMark;
+      if (setup.marks.indexOf(ev.defaultMark) < 0) setup.marks.push(ev.defaultMark);
+    }
     state.planned = ev.planned;
-    state.goalText = ev.defaultGoal;
-    state.goalSec = parseGoal(ev.defaultGoal);
+    state.goalText = ev.defaultGoal || "";
+    state.goalSec = parseGoal(state.goalText);
+    persistSetup();
     resetRace(false);
+    fillSetupForm();
+    renderChrome();
+  }
+
+  function applySetup(cfg) {
+    setup = SplitSetup.normalize(cfg);
+    var ev = SplitSetup.eventById(setup, setup.activeEventId) || setup.events[0];
+    if (ev) {
+      state.eventId = ev.id;
+      state.planned = ev.planned;
+      state.goalText = ev.defaultGoal || "";
+      state.goalSec = parseGoal(state.goalText);
+    }
+    state.mark = setup.mark;
+    state.threshold = detectCfg().threshold;
+    persistSetup();
+    fillSetupForm();
     renderChrome();
   }
 
@@ -432,7 +468,7 @@
   function beginCalibrate() {
     state.cal = null;
     state.calFrames = 0;
-    state.calUntil = performance.now() + CALIBRATE_MS;
+    state.calUntil = performance.now() + detectCfg().calibrateMs;
     if (state.source === "file") {
       var v = videoEl();
       if (v && v.paused) v.play().catch(function () {});
@@ -485,12 +521,12 @@
     if (quiet) {
       var j;
       for (j = 0; j < state.cal.length; j++) {
-        state.cal[j] = state.cal[j] * (1 - BASELINE_EMA) + SplitLine.profile[j] * BASELINE_EMA;
+        state.cal[j] = state.cal[j] * (1 - detectCfg().ema) + SplitLine.profile[j] * detectCfg().ema;
       }
     }
 
     if (!(state.phase === "armed" || state.phase === "running")) return;
-    if (now - state.lastDetectAt < DEBOUNCE_MS) {
+    if (now - state.lastDetectAt < detectCfg().debounceMs) {
       state.spikeRun = 0;
       return;
     }
@@ -498,7 +534,7 @@
     if (energy >= state.threshold) state.spikeRun += 1;
     else state.spikeRun = 0;
 
-    if (state.spikeRun >= SPIKE_FRAMES) {
+    if (state.spikeRun >= detectCfg().spikeFrames) {
       if (state.phase === "armed") setPhase("running");
       state.spikeRun = 0;
       state.lastDetectAt = now;
@@ -670,35 +706,31 @@
     $("threshold").addEventListener("input", function () {
       state.threshold = Number($("threshold").value);
       $("th-val").textContent = String(state.threshold);
+      if (setup) {
+        setup.detect.threshold = state.threshold;
+        persistSetup();
+      }
     });
     $("goal").addEventListener("change", function () {
       state.goalText = $("goal").value.trim();
       state.goalSec = parseGoal(state.goalText);
+      var ev = eventDef();
+      if (ev) ev.defaultGoal = state.goalText;
+      persistSetup();
       renderSplits();
     });
     $("planned").addEventListener("change", function () {
       var n = parseInt($("planned").value, 10);
       if (!isFinite(n) || n < 1) n = 1;
-      if (n > 20) n = 20;
+      if (n > 40) n = 40;
       state.planned = n;
       $("planned").value = String(n);
+      var ev = eventDef();
+      if (ev) ev.planned = n;
+      persistSetup();
+      fillSetupForm();
       renderSplits();
     });
-
-    var i;
-    var evs = document.querySelectorAll("[data-event]");
-    for (i = 0; i < evs.length; i++) {
-      evs[i].addEventListener("click", function (e) {
-        applyEvent(e.currentTarget.getAttribute("data-event"));
-      });
-    }
-    var mks = document.querySelectorAll("[data-mark]");
-    for (i = 0; i < mks.length; i++) {
-      mks[i].addEventListener("click", function (e) {
-        state.mark = e.currentTarget.getAttribute("data-mark");
-        renderChrome();
-      });
-    }
 
     var stage = $("stage");
     stage.addEventListener("pointerdown", onStagePointer);
@@ -732,6 +764,20 @@
       var box = $("connect");
       box.hidden = !box.hidden;
       $("connect-toggle").classList.toggle("on", !box.hidden);
+      if (!box.hidden) {
+        $("setup").hidden = true;
+        $("setup-toggle").classList.remove("on");
+      }
+    });
+    $("setup-toggle").addEventListener("click", function () {
+      var box = $("setup");
+      box.hidden = !box.hidden;
+      $("setup-toggle").classList.toggle("on", !box.hidden);
+      if (!box.hidden) {
+        $("connect").hidden = true;
+        $("connect-toggle").classList.remove("on");
+        fillSetupForm();
+      }
     });
     $("dl-json").addEventListener("click", function () {
       if (!global.SplitSync) return;
@@ -782,6 +828,86 @@
       });
     });
 
+    $("cfg-save").addEventListener("click", function () {
+      var ev = eventDef();
+      if (!ev) return;
+      ev.label = $("cfg-label").value.trim() || ev.label;
+      ev.defaultMark = $("cfg-def-mark").value.trim() || ev.defaultMark;
+      ev.note = $("cfg-note").value.trim();
+      ev.labels = ev.labels || {};
+      ev.labels[state.mark] = $("cfg-labels").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      setup.athlete = $("cfg-athlete").value.trim();
+      setup.meet = $("cfg-meet").value.trim();
+      setup.detect.calibrateMs = Math.max(200, parseInt($("cfg-cal").value, 10) || 1000);
+      setup.detect.debounceMs = Math.max(100, parseInt($("cfg-deb").value, 10) || 800);
+      persistSetup();
+      fillSetupForm();
+      renderChrome();
+      $("cfg-status").textContent = "Saved. Share the URL or export JSON.";
+    });
+    $("cfg-add-mark").addEventListener("click", function () {
+      var name = $("cfg-new-mark").value.trim();
+      if (!name) return;
+      if (setup.marks.indexOf(name) < 0) setup.marks.push(name);
+      state.mark = name;
+      setup.mark = name;
+      $("cfg-new-mark").value = "";
+      persistSetup();
+      renderChrome();
+    });
+    $("cfg-add-event").addEventListener("click", function () {
+      var label = $("cfg-new-event").value.trim() || "Custom";
+      var ev = {
+        id: SplitSetup.uid("e"),
+        label: label,
+        planned: state.planned || 1,
+        defaultMark: state.mark,
+        defaultGoal: state.goalText || "",
+        labels: {},
+        note: "One camera. One mark."
+      };
+      ev.labels[state.mark] = [];
+      setup.events.push(ev);
+      $("cfg-new-event").value = "";
+      persistSetup();
+      applyEvent(ev.id);
+      $("cfg-status").textContent = "Added " + label + ". Edit names, then Save event.";
+    });
+    $("cfg-del").addEventListener("click", function () {
+      if (!setup || setup.events.length < 2) {
+        $("cfg-status").textContent = "Keep at least one event.";
+        return;
+      }
+      setup.events = setup.events.filter(function (e) { return e.id !== state.eventId; });
+      applyEvent(setup.events[0].id);
+      $("cfg-status").textContent = "Event removed.";
+    });
+    $("cfg-export").addEventListener("click", function () {
+      $("cfg-json").value = SplitSetup.exportBlob(setup);
+      SplitSync.downloadJson(setup, "split-setup.json");
+    });
+    $("cfg-import").addEventListener("click", function () {
+      try {
+        applySetup(SplitSetup.fromJson($("cfg-json").value));
+        $("cfg-status").textContent = "Imported setup.";
+      } catch (e) {
+        $("cfg-status").textContent = "Import failed. Paste setup JSON.";
+      }
+    });
+    $("cfg-reset").addEventListener("click", function () {
+      localStorage.removeItem("split.setup.v2");
+      applySetup(SplitSetup.applyQuery(SplitSetup.defaults()));
+      $("cfg-status").textContent = "Stock presets restored.";
+    });
+    ["cfg-athlete", "cfg-meet"].forEach(function (id) {
+      $(id).addEventListener("change", function () {
+        if (!setup) return;
+        setup.athlete = $("cfg-athlete").value.trim();
+        setup.meet = $("cfg-meet").value.trim();
+        persistSetup();
+      });
+    });
+
     window.addEventListener("resize", function () {
       resizeOverlay();
       if (SplitLine.placed) drawLine();
@@ -790,7 +916,8 @@
 
   function boot() {
     bind();
-    applyEvent("800");
+    setup = SplitSetup.applyQuery(SplitSetup.load());
+    applySetup(setup);
     if (fileBlocked()) {
       $("banner").hidden = false;
       setPhase("blocked");
@@ -809,7 +936,7 @@
     evenSplit: evenSplit,
     nextMust: nextMust
   };
-  global.SplitApp = { boot: boot, state: state, sessionPayload: sessionPayload, loadMedia: loadMedia };
+  global.SplitApp = { boot: boot, state: state, sessionPayload: sessionPayload, loadMedia: loadMedia, setup: function () { return setup; } };
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);

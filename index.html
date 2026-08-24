@@ -209,11 +209,14 @@
       gap: 8px;
       padding: 0 14px 8px;
     }
-    #connect {
+    #setup, #connect {
+      display: flex;
       flex-direction: column;
       gap: 6px;
+      padding: 0 14px 8px;
     }
-    .goals label, #connect label {
+    #setup[hidden], #connect[hidden] { display: none !important; }
+    .goals label, #connect label, #setup label {
       flex: 1;
       font-size: 10px;
       color: var(--mute);
@@ -221,7 +224,7 @@
       letter-spacing: 0.06em;
       font-weight: 700;
     }
-    .goals input, #connect input {
+    .goals input, #connect input, #setup input, #setup textarea {
       width: 100%;
       margin-top: 3px;
       background: var(--card);
@@ -232,6 +235,11 @@
       font-size: 14px;
     }
     .goals input { font-variant-numeric: tabular-nums; font-size: 16px; }
+    #setup textarea {
+      min-height: 52px;
+      resize: vertical;
+      font-family: inherit;
+    }
     .pair { display: flex; gap: 8px; }
     #ai-out {
       margin: 0;
@@ -263,16 +271,9 @@
     <h1>Split</h1>
     <div id="mark-pill">Camera is on FINISH</div>
   </header>
-  <div class="chips" aria-label="Event">
-    <button type="button" data-event="800" class="on">800</button>
-    <button type="button" data-event="400">400</button>
-    <button type="button" data-event="200">200-repeat</button>
-  </div>
-  <div class="chips" aria-label="Camera mark">
-    <button type="button" data-mark="FINISH" class="on">FINISH</button>
-    <button type="button" data-mark="200">200</button>
-  </div>
-  <div id="note">Camera is on FINISH. Crossing 1 = 400. Crossing 2 = 800.</div>
+  <div class="chips" id="event-chips" aria-label="Event"></div>
+  <div class="chips" id="mark-chips" aria-label="Camera mark"></div>
+  <div id="note">Camera is on one mark. Draw a line. ARM. The crossing is the stamp.</div>
   <div id="stage">
     <video id="video" playsinline muted></video>
     <canvas id="overlay"></canvas>
@@ -281,21 +282,22 @@
   <div id="clock">0:00.00</div>
   <div class="row">
     <div class="stat"><span>This</span><b id="this-int">—</b></div>
-    <div class="stat"><span>Even</span><b id="even-int">1:03.52</b></div>
-    <div class="stat"><span>Next must</span><b id="next-must">1:03.52</b></div>
+    <div class="stat"><span>Even</span><b id="even-int">set goal</b></div>
+    <div class="stat"><span>Next must</span><b id="next-must">set goal</b></div>
   </div>
-  <div id="remain" class="remain">1:03.52 left</div>
+  <div id="remain" class="remain">set a goal</div>
   <div id="count">0 / 2</div>
   <ul id="split-list"></ul>
   <button type="button" id="arm">ENABLE CAMERA</button>
   <div class="goals">
-    <label>Goal <input id="goal" inputmode="decimal" value="2:07.04" /></label>
+    <label>Goal <input id="goal" inputmode="decimal" placeholder="M:SS.xx" value="" /></label>
     <label>Crossings <input id="planned" inputmode="numeric" value="2" /></label>
   </div>
   <div class="media-row">
     <label for="file">Upload clip</label>
     <input id="file" type="file" accept="video/*,.mp4,.mov,.webm,.m4v" />
     <button type="button" id="play" hidden>Play</button>
+    <button type="button" id="setup-toggle">Setup</button>
     <button type="button" id="connect-toggle">Connect AI</button>
     <button type="button" id="dl-json">JSON</button>
   </div>
@@ -307,7 +309,7 @@
       <label>Model <input id="ai-model" placeholder="local-model" autocomplete="off" /></label>
     </div>
     <label>API key <input id="ai-key" type="password" placeholder="stays in this browser" autocomplete="off" /></label>
-    <label>Ask <input id="ai-q" placeholder="What did the 400 go?" /></label>
+    <label>Ask <input id="ai-q" placeholder="What were the splits vs even?" /></label>
     <div class="media-row">
       <button type="button" id="sync-now">Sync now</button>
       <button type="button" id="ai-ask">Send</button>
@@ -315,6 +317,41 @@
     </div>
     <div id="sync-status">Off. Paste an endpoint or a local OpenAI-compatible URL.</div>
     <pre id="ai-out"></pre>
+  </div>
+  <div id="setup" hidden>
+    <div class="pair">
+      <label>Athlete <input id="cfg-athlete" placeholder="optional" autocomplete="name" /></label>
+      <label>Meet <input id="cfg-meet" placeholder="optional" /></label>
+    </div>
+    <div class="pair">
+      <label>Event name <input id="cfg-label" placeholder="800" /></label>
+      <label>Default mark <input id="cfg-def-mark" placeholder="FINISH" /></label>
+    </div>
+    <label>Split names, comma-separated <input id="cfg-labels" placeholder="400, 800" /></label>
+    <label>Note <input id="cfg-note" placeholder="One camera. One mark." /></label>
+    <div class="pair">
+      <label>Calibrate ms <input id="cfg-cal" inputmode="numeric" value="1000" /></label>
+      <label>Debounce ms <input id="cfg-deb" inputmode="numeric" value="800" /></label>
+    </div>
+    <div class="pair">
+      <label>New mark <input id="cfg-new-mark" placeholder="300" /></label>
+      <label>New event <input id="cfg-new-event" placeholder="Mile" /></label>
+    </div>
+    <div class="media-row">
+      <button type="button" id="cfg-save">Save event</button>
+      <button type="button" id="cfg-add-mark">Add mark</button>
+      <button type="button" id="cfg-add-event">Add event</button>
+      <button type="button" id="cfg-del">Delete event</button>
+    </div>
+    <label>Share / import setup JSON
+      <textarea id="cfg-json" spellcheck="false" placeholder='{"events":[]}'></textarea>
+    </label>
+    <div class="media-row">
+      <button type="button" id="cfg-export">Export</button>
+      <button type="button" id="cfg-import">Import</button>
+      <button type="button" id="cfg-reset">Stock presets</button>
+    </div>
+    <div id="cfg-status">Anyone can change events, marks, labels, goal, and detect timing. Link stays in the URL.</div>
   </div>
   <div class="tune">
     <span>Tune</span>
@@ -328,6 +365,7 @@
     <span class="tiny">The crossing is the stamp</span>
   </footer>
   <script src="line.js"></script>
+  <script src="config.js"></script>
   <script src="sync.js"></script>
   <script src="split.js"></script>
 </body>

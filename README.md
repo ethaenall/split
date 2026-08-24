@@ -10,7 +10,9 @@ Ethan Birchenall. Sammamish. Skyline. IB Diploma Candidate. Varsity scholar trac
 
 On a 400m track the 200 and the finish are opposite sides. One phone cannot see both. This camera sits on one mark. The UI says which.
 
-Default demo: camera on FINISH, event 800. Crossing 1 = 400 split. Crossing 2 = 800 finish. Goal 2:07.04. Also 400-at-finish (goal 55.25) and 200-repeat.
+Stock presets: 100, 200, 400, 800, 1500, 200-repeat. Add your own event, mark, split names, goal, crossings, calibrate, and debounce. Setup exports JSON. The URL holds `e`, `m`, `g`, `n` so a meet can share a link. Goal starts empty — type yours.
+
+Example times I run (not baked into the app): 400 55.25, 800 2:07.04.
 
 ## Run
 
@@ -37,8 +39,8 @@ Connect AI is optional. Paste a webhook. Every crossing POSTs JSON. Or download 
 | Upload / drop a race clip | Official FAT / photo-finish pixels |
 | 1s empty-line calibrate, then ARM | Lane assignment, built-in coach |
 | Luma sample vs short baseline, 800ms debounce | Cloud accounts |
-| Cumulative, this interval, even split, next-must | |
 | BYO AI: webhook sync, JSON, OpenAI-compatible ask | |
+| Configurable events / marks / labels / detect | |
 
 Even split = goal / planned crossings. Remaining = goal − elapsed. Next = remaining / crossings left. Times are M:SS.xx.
 

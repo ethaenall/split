@@ -8,7 +8,7 @@ Stamp a split when a body crosses a line drawn on live video. Built for a phone 
 
 ## Named person
 
-Ethan Birchenall, Sammamish. Skyline IB Diploma Candidate. Runs 400 / 800 / 4x400. Example goals (editable): 400 55.25, 800 2:07.04.
+Ethan Birchenall built this for Reverie Hacks. The app is not locked to him. Any athlete/meet name is optional in Setup.
 
 The barrier is the tap. A parent on the rail hits a button late. Split is the line.
 
@@ -29,8 +29,9 @@ High-school and college runners, parents on a tripod, small meets without a Fini
 - Cumulative, this interval, even-split goal, next-interval must-hit
 - Threshold slider in the tune row
 - Tiny manual MARK backup
-- Event modes: 800 @ finish, 400 @ finish, 200-repeat
-- UI states the camera mark: FINISH or 200
+- Stock events: 100, 200, 400, 800, 1500, 200-repeat — plus any event you add
+- Any camera mark you name
+- Setup: labels, goal, crossings, calibrate, debounce, import/export JSON, shareable URL
 - Upload or drop a race clip (same line detector; clock follows the video)
 - Connect AI: webhook POST on each crossing, download/copy session JSON, optional OpenAI-compatible ask
 - Keys and tokens stay in `localStorage` on this device. No built-in coach.
@@ -54,39 +55,40 @@ GitHub Pages (HTTPS) is the public judge URL once the repo is pushed.
 
 ## User manual
 
-1. Allow the camera.
-2. Confirm the event and the camera mark.
-3. Set the goal if you are not using 2:07.04 / 55.25.
-4. Tap the video to drop the line on the finish plane. Toggle Vertical / Horizontal in the tune row if the mark is a horizontal bar.
-5. Press ARM. Keep the line empty for one second.
-6. Clock starts when ARM finishes calibrate. That is the gun.
+1. Allow the camera, or upload a clip.
+2. Pick an event and the camera mark — or open Setup and make your own.
+3. Type a goal if you want even-split / next-must.
+4. Tap the video to drop the line. Toggle Vertical / Horizontal if you need a bar.
+5. Press ARM. Keep the line empty for the calibrate window.
+6. Clock starts when ARM finishes calibrate. That is the gun. On a clip, the clock follows the video.
 7. Each body that crosses stamps cumulative time and the interval.
 8. Read this interval vs even split, and what the next interval must be.
-9. If the line is too hot or too deaf, move the threshold slider. Δ is live energy against baseline.
-10. MARK is a last-resort tap. Do not build the race on it.
+9. Tune threshold, debounce, and calibrate in Setup if the line is too hot or too deaf.
+10. MARK is a last-resort tap.
 
-### Modes
+### Stock events
 
-| Event | Default mark | Planned crossings | Default goal | Crossing names |
+| Event | Default mark | Planned | Goal | Crossing names |
 | --- | --- | --- | --- | --- |
-| 800 | FINISH | 2 | 2:07.04 | 400, 800 |
-| 400 | FINISH | 1 | 0:55.25 | 400 |
-| 200-repeat | 200 | 4 (editable) | none — type one | 200 #1 … |
+| 100 | FINISH | 1 | empty | 100 |
+| 200 | FINISH | 1 | empty | 200 |
+| 400 | FINISH | 1 | empty | 400 |
+| 800 | FINISH | 2 | empty | 400, 800 |
+| 1500 | FINISH | 4 | empty | 300, 700, 1100, 1500 |
+| 200-repeat | 200 | 4 | empty | 200 #1 … |
 
-200 goal is UNKNOWN until you type it. Even-split math hides behind “set goal” until then.
-
-If you put an 800 on the 200 mark, the note says you will not see 400 or finish.
+Everything in that table is editable. Add events and marks. Export JSON or share `?e=800&m=FINISH&g=2:00.00&n=2`.
 
 ## Configuration
 
 | Control | Meaning | Default |
 | --- | --- | --- |
-| Threshold | Mean absolute luma change along the line that counts as a spike | 18 |
+| Threshold | Mean absolute luma change that counts as a spike | 18 |
 | Orientation | Vertical or horizontal line | Vertical |
-| Goal | Race goal, `M:SS.xx` or `SS.xx` | 2:07.04 |
-| Crossings | Planned hits at this camera | 2 for 800 |
-| Debounce | Hard-coded | 800ms |
-| Calibrate | Hard-coded | 1000ms |
+| Goal | Race goal, `M:SS.xx` or `SS.xx` | empty |
+| Crossings | Planned hits at this camera | per event |
+| Debounce | Quiet window after a hit | 800ms, editable |
+| Calibrate | Empty-line sample before ARM | 1000ms, editable |
 | Spike frames | Consecutive frames over threshold | 2 |
 
 Baseline is the 1s calibrate profile, then a slow EMA on quiet frames so clouds do not count as athletes.
@@ -107,7 +109,8 @@ Display is `M:SS.xx`. No coach copy. No predicted place. Built-in model is none.
 | --- | --- |
 | `index.html` | Shell, dark phone-wide CSS |
 | `line.js` | Place line, sample 64 luma points, draw, flash |
-| `split.js` | Camera, file clip, calibrate, detect, clock, modes, math |
+| `config.js` | Meet setup: events, marks, detect, URL, import/export |
+| `split.js` | Camera, file clip, calibrate, detect, clock, math |
 | `sync.js` | Session JSON, webhook, last-20 log, OpenAI-compatible ask |
 | `LICENSE` | MIT, Copyright 2026 Ethan Birchenall |
 

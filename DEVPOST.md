@@ -37,7 +37,7 @@ I run the 400 and the 800. The split I get is when a parent taps a screen, not w
 I wanted the time when the body hits the line. Not when a parent taps.
 
 **What it does**
-Live camera or an uploaded race clip. You draw a line. ARM calibrates one empty second, then the clock is the gun (on a clip, the clock follows the video). A luma spike on that line, debounced 800ms, is a crossing. You see cumulative, this interval, even split, and what the next interval must be. Default: camera on FINISH, 800, goal 2:07.04 — first hit is the 400, second is the finish. Also 400-at-finish and 200-repeat. Connect AI is optional: webhook POSTs each crossing, or download/copy JSON into your model. No built-in coach. Manual MARK exists and is small.
+A finish-line camera for any runner. Live camera or an uploaded clip. Draw a line. ARM calibrates, then the crossing stamps the split. Configure event, camera mark, split names, planned crossings, goal, calibrate, and debounce. Share a setup URL or JSON. Optional webhook / BYO model syncs the session. No built-in coach. One phone, one mark. Manual MARK is small.
 
 **How I built it**
 Vanilla JavaScript. No npm. No frameworks. `getUserMedia` for the feed. A 1-pixel strip along the line, 64 luma samples, mean absolute error against a 1-second baseline, slow EMA while quiet. Static files. Serve with `python3 -m http.server` or GitHub Pages.
