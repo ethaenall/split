@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070708" />
+  <title>Split — finish-line camera</title>
+  <style>
+    :root {
+      --bg: #070708;
+      --ink: #f4f4f1;
+      --mute: #8b8b86;
+      --line: #e8ff3d;
+      --arm: #ff2d2d;
+      --good: #3dff8a;
+      --late: #ff5a3d;
+      --card: #111114;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0; background: var(--bg); color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      min-height: 100%;
+    }
+    body {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+    }
+    #banner {
+      background: #e8ff3d;
+      color: #111;
+      font-size: 13px;
+      font-weight: 650;
+      padding: 10px 14px;
+      line-height: 1.35;
+    }
+    #banner code { font-size: 12px; }
+    header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 10px 14px 6px;
+    }
+    header h1 {
+      margin: 0; font-size: 15px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 750;
+    }
+    #mark-pill {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--line);
+    }
+    .chips {
+      display: flex;
+      gap: 6px;
+      padding: 0 14px 8px;
+      flex-wrap: wrap;
+    }
+    .chips button {
+      appearance: none;
+      border: 1px solid #2a2a2e;
+      background: var(--card);
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .chips button.on {
+      background: var(--ink);
+      color: #111;
+      border-color: var(--ink);
+    }
+    #note {
+      padding: 0 14px 8px;
+      color: var(--mute);
+      font-size: 12px;
+      line-height: 1.35;
+      min-height: 2.6em;
+    }
+    #stage {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 38vh;
+      background: #000;
+      overflow: hidden;
+    }
+    #stage.hit { outline: 3px solid #fff; outline-offset: -3px; }
+    #video, #overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #video { object-fit: cover; background: #000; }
+    #overlay { pointer-events: none; }
+    #hint {
+      position: absolute;
+      inset: auto 16px 14px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 650;
+      text-shadow: 0 1px 4px #000;
+      pointer-events: none;
+    }
+    body[data-phase="live"] #hint { display: block; }
+    body:not([data-phase="live"]) #hint { display: none; }
+    #clock {
+      font-variant-numeric: tabular-nums;
+      font-feature-settings: "tnum" 1;
+      font-size: clamp(56px, 18vw, 92px);
+      font-weight: 750;
+      letter-spacing: -0.04em;
+      line-height: 0.95;
+      padding: 8px 14px 0;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      padding: 8px 14px 4px;
+    }
+    .stat { min-width: 0; }
+    .stat b {
+      display: block;
+      font-variant-numeric: tabular-nums;
+      font-size: 18px;
+      font-weight: 750;
+    }
+    .stat span {
+      display: block;
+      color: var(--mute);
+      font-size: 10px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+    .delta.late, .remain.late { color: var(--late); }
+    .delta.early, .remain.early { color: var(--good); }
+    #remain, #count {
+      padding: 0 14px;
+      font-size: 12px;
+      color: var(--mute);
+    }
+    #split-list {
+      list-style: none;
+      margin: 6px 0 0;
+      padding: 0 14px;
+      max-height: 18vh;
+      overflow: auto;
+    }
+    #split-list li {
+      display: grid;
+      grid-template-columns: 18px 1fr auto auto 64px;
+      gap: 8px;
+      font-variant-numeric: tabular-nums;
+      font-size: 13px;
+      padding: 3px 0;
+      border-top: 1px solid #1c1c20;
+    }
+    #split-list .n { color: var(--mute); }
+    #split-list .vs { text-align: right; color: var(--mute); }
+    #arm {
+      margin: 10px 14px 6px;
+      height: 72px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--arm);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      width: calc(100% - 28px);
+    }
+    body[data-phase="armed"] #arm,
+    body[data-phase="running"] #arm {
+      background: #7a1010;
+      box-shadow: 0 0 0 1px #ff2d2d inset;
+    }
+    body[data-phase="calibrating"] #arm { background: #3a3a22; color: var(--line); }
+    body[data-phase="done"] #arm { background: var(--ink); color: #111; letter-spacing: 0.08em; }
+    #arm:disabled { opacity: 0.85; }
+    .tune {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 14px 2px;
+      font-size: 11px;
+      color: var(--mute);
+    }
+    .tune input[type="range"] { flex: 1; }
+    .tune button, .tiny {
+      appearance: none;
+      background: none;
+      border: 0;
+      color: var(--mute);
+      font-size: 11px;
+      font-weight: 650;
+      padding: 6px 4px;
+    }
+    .goals {
+      display: flex;
+      gap: 8px;
+      padding: 0 14px 8px;
+    }
+    .goals label {
+      flex: 1;
+      font-size: 10px;
+      color: var(--mute);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 700;
+    }
+    .goals input {
+      width: 100%;
+      margin-top: 3px;
+      background: var(--card);
+      border: 1px solid #2a2a2e;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 8px;
+      font-variant-numeric: tabular-nums;
+      font-size: 16px;
+    }
+    footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 14px 10px;
+    }
+    #mark { text-decoration: underline; text-underline-offset: 2px; }
+  </style>
+</head>
+<body data-phase="boot">
+  <div id="banner" hidden>
+    Camera is blocked on file://. In this folder run
+    <code>python3 -m http.server 8765</code>
+    then open <code>http://127.0.0.1:8765</code>
+  </div>
+  <header>
+    <h1>Split</h1>
+    <div id="mark-pill">Camera is on FINISH</div>
+  </header>
+  <div class="chips" aria-label="Event">
+    <button type="button" data-event="800" class="on">800</button>
+    <button type="button" data-event="400">400</button>
+    <button type="button" data-event="200">200-repeat</button>
+  </div>
+  <div class="chips" aria-label="Camera mark">
+    <button type="button" data-mark="FINISH" class="on">FINISH</button>
+    <button type="button" data-mark="200">200</button>
+  </div>
+  <div id="note">Camera is on FINISH. Crossing 1 = 400. Crossing 2 = 800.</div>
+  <div id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <canvas id="overlay"></canvas>
+    <div id="hint">Tap to place the line</div>
+  </div>
+  <div id="clock">0:00.00</div>
+  <div class="row">
+    <div class="stat"><span>This</span><b id="this-int">—</b></div>
+    <div class="stat"><span>Even</span><b id="even-int">1:03.52</b></div>
+    <div class="stat"><span>Next must</span><b id="next-must">1:03.52</b></div>
+  </div>
+  <div id="remain" class="remain">1:03.52 left</div>
+  <div id="count">0 / 2</div>
+  <ul id="split-list"></ul>
+  <button type="button" id="arm">ENABLE CAMERA</button>
+  <div class="goals">
+    <label>Goal <input id="goal" inputmode="decimal" value="2:07.04" /></label>
+    <label>Crossings <input id="planned" inputmode="numeric" value="2" /></label>
+  </div>
+  <div class="tune">
+    <span>Tune</span>
+    <input id="threshold" type="range" min="6" max="64" value="18" />
+    <b id="th-val">18</b>
+    <button type="button" id="orient">Vertical</button>
+    <span>Δ <b id="energy">0.0</b></span>
+  </div>
+  <footer>
+    <button type="button" class="tiny" id="mark">MARK</button>
+    <span class="tiny">The crossing is the stamp</span>
+  </footer>
+  <script src="line.js"></script>
+  <script src="split.js"></script>
+</body>
+</html>
